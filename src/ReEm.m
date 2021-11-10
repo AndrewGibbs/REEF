@@ -7,13 +7,15 @@ classdef ReEm < handle
         FF_in
         alpha_in
         kwave
-        qppw = 50; %optimised for pmax = 4, 1e-3 accurate far-fields
+        qppw = 20; %optimised using screen_testRES_test_quad.m (was 50)
         p
         M
         RotShift = 0
         
         % thresholds/tolerances
-        round_error_width = 1e-3/2
+        %round_error_width_per_can_inc = 0.0015 %optimised using screen_testRES_test_quad.m (was 1e-3/2)
+        round_error_width = 0.001
+        clas_error_width = 0.1 % width at which classical embedding formula becomes inaccurate
         rank_tol = 1e-5
         
         
@@ -23,8 +25,6 @@ classdef ReEm < handle
         ffDhat
         
         %analysis parameters:
-        total_quad_pts
-        imag_dist
         alpha_cond
         full_rank % does the collocation matrix have full rank?
         
@@ -39,13 +39,17 @@ classdef ReEm < handle
             self.kwave = kwave;
             self.p = p;
             self.M = length(alpha_in);
+            wavelength = 2*pi/kwave; 
             
-            self.imag_dist = 1/kwave;
+            % set this to be not too small that it interferes with the
+            % rounding error limits, and small enough that it accounts for
+            % the oscillations in kwave and p
+            self.round_error_width = self.round_error_width;
+            self.clas_error_width = min(pi/p,max(self.clas_error_width,6*self.round_error_width));
+            
             
             for n=1:length(varargin)
-               if strcmp(varargin{n},'imag dist')
-                   self.imag_dist = varargin{n+1};
-               elseif strcmp(varargin{n},'qppw')
+                if strcmp(varargin{n},'qppw')
                    self.qppw = varargin{n+1};
                elseif strcmp(varargin{n},'M')
                    self.M = varargin{n+1};
@@ -56,10 +60,9 @@ classdef ReEm < handle
             end
             
             self.hat=@(theta,alpha) cos(p*repmat(theta,1,length(alpha)))-(-1)^p*cos(p*(repmat(alpha,length(theta),1)));
-            % .  hat=@(theta,alpha) cos(p*repmat(theta,1,length(alpha)))-(-1)^p*cos(p*(repmat(alpha,length(theta),1)));
             
             % Part One - The collocation matrix can be singular. 
-            % sTaking more canonical incident angles gives a better chance
+            % Taking more canonical incident angles gives a better chance
             % of finding a submatrix which is invertible.
             
             ffDhat_temp = zeros(length(alpha_in));
@@ -128,157 +131,123 @@ classdef ReEm < handle
             %get the coefficients b_m(\alpha)
             B = self.getBmatrix(alpha_out);
             h = self.round_error_width;
+            H = self.clas_error_width;
             
-            ResIndices1 = zeros(length(alpha_out), length(theta_out));
-            ResIndices2 = zeros(length(alpha_out), length(theta_out));
+            [ResDist1,ResDist2,ResVals1,ResVals2,Dhat_res_vals1,Dhat_res_vals2,Dhat_res_vals] = ...
+                get_residue_data(theta_out,alpha_out,Z,self.alpha_in,self.FF_in,self.hat);
+          
 
-            for n = 1:length(alpha_out)
-                [res_index1, res_index2] = split_obs_angles(theta_out, Z(n,:));
-                ResIndices1(n,:) = res_index1;
-                ResIndices2(n,:) = res_index2;
-            end
+            [res_pairs,~,cases,case4_theta_inds,case5_theta_inds,case6_theta_inds,case7_theta_inds]...
+            = choose_cases(theta_out,alpha_out,Z,h,H);
             
-            for n=1:length(alpha_out)
-                ResVals1(n,:) = Z(n,ResIndices1(n,:));
-                ResVals2(n,:) = Z(n,ResIndices2(n,:));
-            end
+             % create tiled copies of b_m for indexing purposes
+             for m=1:length(self.alpha_in)
+                 B_m_tiled{m} = repmat(B(m,:),length(theta_out),1); 
+             end
             
-            % store the residue values so they are not recomputed loads of times
-            
-            Zlong = reshape(Z,numel(Z),1);
-            Res1IndsLong = reshape(ResIndices1,numel(ResIndices1),1);
-            Res2IndsLong = reshape(ResIndices2,numel(ResIndices2),1);
-            ResVals1long = reshape(ResVals1,numel(ResVals1),1);
-            ResVals2long = reshape(ResVals2,numel(ResVals2),1);
-            
-            for m =1:length(self.alpha_in)
-                Dhat_res_vals{m} = zeros(size(Z));
-                Dhat_res_vals_long = self.hat(Zlong,self.alpha_in(m)).*self.FF_in{m}(Zlong);
-                Dhat_res_vals{m} = reshape(Dhat_res_vals_long,size(Z));
-                
-                %Dhat_res_vals_short = self.hat(Z(n,:), self.alpha_in(m)).*self.FF_in{m}(Z(n,:));
-                for n=1:length(alpha_out)
-%                     Dhat_res_vals1_long(n,:) = Dhat_res_vals{m}(n,ResIndices1(n,:)).';
-                    Dhat_res_vals1{m}(n,:) = Dhat_res_vals{m}(n,ResIndices1(n,:)).';
-                    Dhat_res_vals2{m}(n,:) = Dhat_res_vals{m}(n,ResIndices2(n,:)).';
-                end
-                %Dhat_res_vals1_long = Dhat_res_vals_short(ResIndices1(n,:)).';
-%                 Dhat_res_vals1_long_old = self.hat(ResVals1long, self.alpha_in(m)).*self.FF_in{m}(ResVals1long);
-%                 Dhat_res_vals1{m} = reshape(Dhat_res_vals1_long_old, size(ResVals1)); %5x1000
-                
-                
-%                 for n=1:length(alpha_out)
-%                     %Dhat_res_vals2_long(n,:) = Dhat_res_vals{m}(n,ResIndices2(n,:)).';
-%                 end
-%                 Dhat_res_vals2_short = self.hat(Z(n,:), self.alpha_in(m)).*self.FF_in{m}(Z(n,:));
-                %Dhat_res_vals2_long = Dhat_res_vals_short(ResIndices2(n,:)).';
-%                 Dhat_res_vals2_long_old = self.hat(ResVals2long, self.alpha_in(m)).*self.FF_in{m}(ResVals2long);
-%                 Dhat_res_vals2{m} = reshape(Dhat_res_vals2_long_old, size(ResVals2));
-            end
-            %these distances will be wrong over the 2pi-0 jump
-            ResDist1 = (ResVals1.'-theta_out);
-            ResDist2 = (ResVals2.'-theta_out);
+            Laurent_coeff = @(chi) -1./(self.p*sin(self.p*chi));
 
-            a = @(chi) -1./(self.p*sin(self.p*chi));
-
-            top = zeros(length(alpha_out), length(theta_out));
-            bottom = (self.hat(theta_out,alpha_out).*ResDist1.*ResDist2).';
+            % construct the classical embedding formula (case one)
+            top = zeros(length(theta_out),length(alpha_out));
+            full_hat = (self.hat(theta_out,alpha_out));
+            bottom = full_hat;
             for m=1:length(self.alpha_in)
-                top = top + (B(m,:).*(...
-                                ResDist1.*ResDist2.*self.hat(theta_out,self.alpha_in(m)).*self.FF_in{m}(theta_out) ...
-                                + a(ResVals1.').*ResDist2.*(Dhat_res_vals1{m}).'.*self.hat(theta_out,alpha_out) ...
-                                + a(ResVals2.').*ResDist1.*(Dhat_res_vals2{m}).'.*self.hat(theta_out,alpha_out)...
-                            )).';
+                top = top + B(m,:).*(self.hat(theta_out,self.alpha_in(m)).*self.FF_in{m}(theta_out));
             end
-%                                 + a(ResVals1.').*ResDist2.*(Dhat_res_vals{m}(ResIndices1)).'.*self.hat(theta_out,alpha_out) ...
-%                                 + a(ResVals2.').*ResDist1.*(Dhat_res_vals{m}(ResIndices2)).'.*self.hat(theta_out,alpha_out)...
-%  
             Dout = top./bottom;
-
-            % make the limits for the endpoints of the regions which we integrate
-            % around to avoid rounding errors
             
-            type = zeros(length(alpha_out));
-            for n=1:length(alpha_out)
-                if abs(Z(n,2)-Z(n,1))<2*h %case 2a
-                    roundL{n} = Z(n,1:2:end);
-                    roundR{n} = Z(n,2:2:end);
-                    type(n) = 2.1;
-                elseif abs(Z(n,3)-Z(n,2))<2*h %case 2b
-                    roundL{n} = Z(n,2:2:end);
-                    roundL{n} = [0 roundL{n} Z(n,end)];
-                    roundR{n} = Z(n,3:2:end);
-                    roundR{n} = [Z(n,1) roundR{n} 2*pi];
-                    type(n) = 2.2;
-                else %case 1 (most common (but still uncommon))
-                    roundL{n} = Z;
-                    roundR{n} = Z;
-                    type(n) = 1;
-                end
+     % now add a correction if required (cases 2-4)
+            
+            % case 2
+            top = zeros(length(theta_out),length(alpha_out));
+            bottom = full_hat.*ResDist1;
+            for m=1:length(self.alpha_in)
+                top(cases==2) = top(cases==2) + B_m_tiled{m}(cases==2).*(...
+                                + Laurent_coeff(ResVals1(cases==2)).*(Dhat_res_vals1{m}(cases==2)).*full_hat(cases==2) ...
+                                );
             end
-
-            % now compute the values in the danger zone using a Cauchy
-            % integral, which is far more stable and can avoid the rounding
-            % errors:
+            Dout(cases==2) = Dout(cases==2) + top(cases==2)./bottom(cases==2);
             
+            % case 3 (can def be lumped together with case 2 one day)
+            top = zeros(length(theta_out),length(alpha_out));
+            bottom = (full_hat.*ResDist1.*ResDist2);
+            for m=1:length(self.alpha_in)
+                top(cases==3) = top(cases==3) + B_m_tiled{m}(cases==3).*(...
+                                + Laurent_coeff(ResVals1(cases==3)).*ResDist2(cases==3).*(Dhat_res_vals1{m}(cases==3)).*full_hat(cases==3) ...
+                                + Laurent_coeff(ResVals2(cases==3)).*ResDist1(cases==3).*(Dhat_res_vals2{m}(cases==3)).*full_hat(cases==3) ...
+                                );
+            end
+            Dout(cases==3) = Dout(cases==3) + top(cases==3)./bottom(cases==3);
+            
+       %cases 4-7 all require some kind of Cauchy integral.
+       
             for n=1:length(alpha_out)
-                %first replace the values where the residues are too close
-                %together.
-                if round(type(n)) == 2
-                    num_clumps = numel(Z)/length(alpha_out)/2;
-%                     if type(n) == 2.1
-%                         num_clumps = num_clumps + 1;
-%                     end
-                    
-                    clump_val = zeros(num_clumps,length(theta_out));
-                    for clump = 1:num_clumps
-                        a = roundL{n}(clump);
-                        b = roundR{n}(clump);
-                        [z,w] = Cauchy_box_quad(theta_out, a-h, b+h, h, self.qppw, self.kwave, false);
+                for res_pair_index=1:length(res_pairs{n})
+                    % case 4 Cauchy integral around residues, not theta_out
+                    if ~isempty(case4_theta_inds{n,res_pair_index})
+                        theta_0 = res_pairs{n}{res_pair_index}(1);
+                        theta_0_ = res_pairs{n}{res_pair_index}(2);
+                        a = min([theta_0 theta_0_])-h;
+                        b = max([theta_0 theta_0_])+h;
+                        [z,w] = Cauchy_box_quad(theta_out(case4_theta_inds{n,res_pair_index}),a,b,h,self.qppw,self.kwave,false);
                         for m=1:length(self.alpha_in)
-                            clump_val(clump,:) = clump_val(clump,:) ...
-                                + B(m,n).*(w.'*(self.hat(z,self.alpha_in(m)).*self.FF_in{m}(z)./self.hat(z,alpha_out(n)))).';
+                            Dout(case4_theta_inds{n,res_pair_index},n) = Dout(case4_theta_inds{n,res_pair_index},n) + ...
+                                    (B(m,n)*w.'*(self.hat(z,self.alpha_in(m)).*self.FF_in{m}(z)./self.hat(z,alpha_out(n))));
                         end
                     end
-            
-                    new_vals = sum(clump_val).'; %sum all the residues for now. Can select nearests later.
                     
-                    for m=1:length(self.alpha_in)
-                        new_vals = new_vals + B(m,n).*(...
-                                    self.hat(theta_out,self.alpha_in(m)).*self.FF_in{m}(theta_out)...
-                                    ./(self.hat(theta_out,alpha_out(n))));
-                    end
-                    
-                    Dout(n,:) = new_vals;
-                end
-                
-                for q =1:length(roundL{n})
-                    theta_dodgy_inds = (roundL{n}(q)-h<theta_out & theta_out<roundR{n}(q)+h);
-                    if sum(theta_dodgy_inds)>0
-                        theta_dodgy = theta_out(theta_dodgy_inds);
-                        [z,w] = Cauchy_box_quad(theta_dodgy,roundL{n}(q)-2*h,roundR{n}(q)+2*h,h,self.qppw,self.kwave);
-                        replacement = zeros(length(theta_dodgy),1);
-                        for m=1:length(self.alpha_in)
-                            replacement = replacement + B(m,n)*w.'*(self.hat(z,self.alpha_in(m)).*self.FF_in{m}(z)./self.hat(z,alpha_out(n)));
-                            if type(n) == 1
-                                replacement = replacement + B(m,n)*(...
-                                    a(ResVals2(n,theta_dodgy_inds).').*(Dhat_res_vals{m}(ResIndices2(n,theta_dodgy_inds))).'...
-                                    );
+                    % Cases 5-7 depend on theta too. Need to cluster the
+                    % theta together, for efficient contour integration.
+
+                        %case 5 integral
+                        for q=1:2
+                            res_index_loc = mod(q,2)+1;
+                            res_nearest_index_loc = mod(q+1,2)+1;
+                            theta_0 = res_pairs{n}{res_pair_index}(res_index_loc);
+                            theta_0_ = res_pairs{n}{res_pair_index}(res_nearest_index_loc);
+                            case5U6_theta_inds = [case5_theta_inds{n,res_pair_index,res_index_loc} case6_theta_inds{n,res_pair_index,res_index_loc}];
+                            if ~isempty(case5U6_theta_inds)
+                                a = min([theta_out(case5U6_theta_inds).' theta_0])-h;
+                                b = max([theta_out(case5U6_theta_inds).' theta_0])+h;
+                                [z,w] = Cauchy_box_quad(theta_out(case5U6_theta_inds),a,b,h,self.qppw,self.kwave,true);
+                                Dout(case5U6_theta_inds,n) = 0;
+                                for m=1:length(self.alpha_in)
+                                    Dout(case5U6_theta_inds,n) = Dout(case5U6_theta_inds,n) +...
+                                        B(m,n)*w.'*(self.hat(z,self.alpha_in(m)).*self.FF_in{m}(z)./self.hat(z,alpha_out(n)));
+
+                                    %case 6 resdiue correction
+                                    if ~isempty(case6_theta_inds{n,res_pair_index})
+                                        Dout(case6_theta_inds{n,res_pair_index,res_index_loc},n) =  Dout(case6_theta_inds{n,res_pair_index,res_index_loc},n)+...
+                                            B(m,n)*(Laurent_coeff(theta_0_).*(Dhat_res_vals{m}(n,res_nearest_index_loc)))./(theta_0_-theta_out(case6_theta_inds{n,res_pair_index,res_index_loc}));
+                                    end
+                                end
                             end
                         end
-                        Dout(n,theta_dodgy_inds) = replacement;
+                    
+                    %case 7 - basically the same as case 4, except theta is inside
+                    %the integral, so can divide by one
+                    if ~isempty(case7_theta_inds{n,res_pair_index})
+                        theta_0 = res_pairs{n}{res_pair_index}(1);
+                        theta_0_ = res_pairs{n}{res_pair_index}(2);
+                        a = min([theta_out(case7_theta_inds{n,res_pair_index}).' theta_0 theta_0_])-h;
+                        b = max([theta_out(case7_theta_inds{n,res_pair_index}).' theta_0 theta_0_])+h;
+                        [z,w] = Cauchy_box_quad(theta_out(case7_theta_inds{n,res_pair_index}),a,b,h,self.qppw,self.kwave,true);
+                        Dout(case7_theta_inds{n,res_pair_index},n) = 0;
+                        for m=1:length(self.alpha_in)
+                            Dout(case7_theta_inds{n,res_pair_index},n) = Dout(case7_theta_inds{n,res_pair_index},n) + ...
+                                    B(m,n)*w.'*(self.hat(z,self.alpha_in(m)).*self.FF_in{m}(z)./self.hat(z,alpha_out(n)));
+                        end
                     end
                 end
             end
+
         end
         
         function FFslider(self,theta_test)
             theta_test = theta_test(:);
             fig = uifigure('Position',[100 100 600 600]);
             ax = uiaxes(fig,'Position',[100 175 400 300]);
-%             ax.legend('real','imaginary');
             fig.Name = 'Far-field pattern';
-%             title('inc field slider');
 
             sld = uislider(fig,...
                 'Position',[150 150 300 3],...
