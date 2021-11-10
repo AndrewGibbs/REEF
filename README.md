@@ -1,4 +1,5 @@
-# REEF (*R*esidue *E*nhanced *E*mbedding *F*ormulae)
+# REEF
+**R**esidue **E**nhanced **E**mbedding **F**ormulae
 
 # Background
 For certain scattering geometries, embedding formulae [1] can be used to efficiently compute the far-field pattern induced by a large range of incident angles.
@@ -7,7 +8,7 @@ Despite the embedding formulae being exact in theory, in [2] it was shown that t
 This Matlab package is a numerically stable implementation of the embedding formulae of [1].
 Numerical stability is achieved by adding residue contributions to the embedding formulae, hence the name _Residue Enhanced Embedding Formulae_.
 
-# Basic usage
+# Usage
 The user must provide ```M```, and ```p```, which are defined as in [1], the wavenumber ```kwave```, and M canonical far-field patterns induced by incident angles in a vector ```alphas```.
 The far-field patterns must be defined as cell array of function handles:
 
