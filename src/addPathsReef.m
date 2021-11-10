@@ -1,5 +1,5 @@
 function addPathsReef()
-    folder = fileparts(which('addPaths'));
+    folder = fileparts(which('addPathsReef'));
 %    addpath(folder);
     addpath(genpath(folder));
 end
