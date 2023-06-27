@@ -39,9 +39,6 @@ classdef Reef < handle
 
         %should the residues be interpolated in the Cauchy integral?
         res_interp = false
-
-        % number of derivatives provided
-        derivs = 0
         
     end
     
@@ -240,7 +237,7 @@ classdef Reef < handle
                                 p_at_resisudes = self.hat(residues,self.alpha_in(m)).*self.FF_in{m}(residues);
                                 denom = @(z) self.hat(z,alpha_out(n));
                                 Dout(case4_theta_inds{n,res_pair_index},n) = Dout(case4_theta_inds{n,res_pair_index},n) + ...
-                                    B(m,n)*Cauchy_interp2(theta_out(case4_theta_inds{n,res_pair_index}), residues, p_at_resisudes, denom, h);
+                                    B(m,n)*Cauchy_interp2(case4_theta_inds{n,res_pair_index}, residues, p_at_resisudes, denom, h);
                             else
                                 Dout(case4_theta_inds{n,res_pair_index},n) = Dout(case4_theta_inds{n,res_pair_index},n) + ...
                                     (B(m,n)*w.'*(self.hat(z,self.alpha_in(m)).*self.FF_in{m}(z)./self.hat(z,alpha_out(n))));
@@ -295,13 +292,10 @@ classdef Reef < handle
                         Dout(case7_theta_inds{n,res_pair_index},n) = 0;
                         for m=1:length(self.alpha_in)
                             if self.res_interp
-                                Dout(case7_theta_inds{n,res_pair_index},n) = Dout(case7_theta_inds{n,res_pair_index},n) + ...
-                                    B(m,n)*Cauchy_interp(theta_out(case7_theta_inds{n,res_pair_index}), [theta_0; theta_0_],...
-                                                                    @(z) self.hat(z,self.alpha_in(m)).*self.FF_in{m}(z),...
-                                                                    @(z) self.hat(z,alpha_out(n)),h);
+
                             else
-                                Dout(case7_theta_inds{n,res_pair_index},n) = Dout(case7_theta_inds{n,res_pair_index},n) + ...
-                                        B(m,n)*w.'*(self.hat(z,self.alpha_in(m)).*self.FF_in{m}(z)./self.hat(z,alpha_out(n)));
+                            Dout(case7_theta_inds{n,res_pair_index},n) = Dout(case7_theta_inds{n,res_pair_index},n) + ...
+                                    B(m,n)*w.'*(self.hat(z,self.alpha_in(m)).*self.FF_in{m}(z)./self.hat(z,alpha_out(n)));
                             end
                         end
                     end

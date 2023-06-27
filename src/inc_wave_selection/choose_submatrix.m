@@ -1,8 +1,4 @@
-function [alpha_in, ffDhat,FF_in,full_rank] = choose_submatrix(alpha_in,FF_in,hat,M,tol)
-ffDhat_temp = zeros(length(alpha_in));
-    for m = 1:length(alpha_in)
-        ffDhat_temp(:,m) = hat(alpha_in,alpha_in(m)).*FF_in{m}(alpha_in);
-    end
+function [alpha_in, ffDhat,FF_in,full_rank] = choose_submatrix(alpha_in,FF_in,ffDhat_temp,M,tol)
 
     % the next several lines are based on mathworks file exchange code at:
     %https://uk.mathworks.com/matlabcentral/fileexchange/77437-extract-linearly-independent-subset-of-matrix-columns

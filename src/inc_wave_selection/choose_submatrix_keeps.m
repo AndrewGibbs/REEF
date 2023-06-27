@@ -1,9 +1,4 @@
-function [alpha_in,ffDhat,FF_in] = choose_submatrix_keeps(alpha_in,FF_in,hat,M,tol,keeps)
-    %construct sampling matrix
-    ffDhat_temp = zeros(length(alpha_in));
-    for m = 1:length(alpha_in)
-        ffDhat_temp(:,m) = hat(alpha_in,alpha_in(m)).*FF_in{m}(alpha_in);
-    end
+function [alpha_in,ffDhat,FF_in] = choose_submatrix_keeps(alpha_in,FF_in,ffDhat_temp,hat,M,tol,keeps)
     
     % now choose submatrix, subject to the constraint of keeping ros/columns indexed by 'keeps'
     [~, column_indices] = greedy_subvol_mod(ffDhat_temp,keeps);
