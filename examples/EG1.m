@@ -1,10 +1,11 @@
-%% For this example to work, you must have downloaded HNABEMLAB and added it
-% to the matlab search path, see:
+%% For this example to work, you must have downloaded HNABEMLAB
+% and added it to the matlab search path, see:
 % https://github.com/AndrewGibbs/HNABEMLAB
 clc;
 clear all;
 close all;
 
+addpath("../");
 addPathsHNA;
 addPathsReef;
 

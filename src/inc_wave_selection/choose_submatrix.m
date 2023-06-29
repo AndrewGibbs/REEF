@@ -1,4 +1,4 @@
-function [alpha_in, ffDhat,FF_in,full_rank] = choose_submatrix(alpha_in,FF_in,ffDhat_temp,M,tol)
+function [alpha_in, ffDhat,FF_in,FF_derivs,full_rank] = choose_submatrix(alpha_in,FF_in,FF_derivs,ffDhat_temp,M,tol)
 
     % the next several lines are based on mathworks file exchange code at:
     %https://uk.mathworks.com/matlabcentral/fileexchange/77437-extract-linearly-independent-subset-of-matrix-columns
@@ -32,6 +32,7 @@ function [alpha_in, ffDhat,FF_in,full_rank] = choose_submatrix(alpha_in,FF_in,ff
     
     for m=1:M
         FF_in{m} = FF_in{uniqe_m_trunc(m)};
+        FF_derivs{m} = FF_derivs{uniqe_m_trunc(m)};
     end
 end
 

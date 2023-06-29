@@ -9,12 +9,14 @@ This Matlab package is a numerically stable implementation of the embedding form
 Numerical stability is achieved by adding residue contributions to the embedding formulae, hence the name _Residue Enhanced Embedding Formulae_.
 
 # Usage
-The user must provide ```M```, and ```p```, which are defined as in [1], the wavenumber ```kwave```, and M canonical far-field patterns induced by incident angles in a vector ```alphas```.
+The user must provide `M`, and `p`, which are defined as in [1], the wavenumber `kwave`, and M canonical far-field patterns induced by incident angles in a vector `alphas`.
 The far-field patterns must be defined as cell array of function handles:
 
-```val = D{m}[obs]```
+```
+val = D{m}[obs]
+```
 
-where ```m``` is the index of the far-field induced by ```alphas(m)```; ```obs``` and ```vals``` are Nx1 vectors of observation angles. Then the code
+where `m` is the index of the far-field induced by `alphas(m)`; `obs` and `vals` are Nx1 vectors of observation angles. Then the code
 
 ```
 E = Reef(D,alphas,kwave,p);
@@ -23,7 +25,7 @@ Eout = E.getFarField(obs_test,inc_test);
 will efficiently  compute the cross-section for a large number of incident angles ```inc_test``` at the observation angles ```obs_test```.
 
 A full example is provided in EG1.m, which produces the following cross-section with wavenumber 15 on a unit square:
-![HNABEMLAB](https://github.com/AndrewGibbs/REEF/blob/main/egsquare.png?raw=true)
+![HNABEMLAB](https://github.com/AndrewGibbs/REEF/blob/main/examples/egsquare.png?raw=true)
 
 # Bibliography
 
