@@ -1,4 +1,4 @@
-function I = Cauchy_interp2(theta_set, residues, p_at_resisudes, denom, h, Nquad)
+function I = Cauchy_interp_case4(theta_set, residues, p_at_resisudes, denom, h, Nquad)
     % computes cauchy integral for the case when theta is not inside
     % contour
     theta_set = theta_set(:);

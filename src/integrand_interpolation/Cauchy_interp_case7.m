@@ -1,7 +1,6 @@
 function I = Cauchy_interp_case7(theta, theta_0, theta_0_, B_coeffs, Dhatin, ...
                             Dhatin_derivs, hatout, p, h, Nquad, dtheta, sum_bm_Dhat_at_theta)
 
-
     a = min([theta; theta_0; theta_0_])-h;
     b = max([theta; theta_0; theta_0_])+h;
 
@@ -46,11 +45,12 @@ function I = Cauchy_interp_case7(theta, theta_0, theta_0_, B_coeffs, Dhatin, ...
 
     %% special cases - where difference between residues is negligable
     theta2theta_0 = cyclic_distance(theta,theta_0);
-%     theta2theta_0_ = cyclic_distance(theta,theta_0_);
+    theta2theta_0_ = cyclic_distance(theta,theta_0_);
     theta_02theta_0_ = cyclic_distance(theta_0,theta_0_);
 
     % collect indices corresponding to special cases
     inds_7i = (theta2theta_0<dtheta) & (theta_02theta_0_>=dtheta);
+    inds_7i_ = (theta2theta_0_<dtheta) & (theta_02theta_0_>=dtheta);
     inds_7ii = (theta2theta_0>=dtheta) & (theta_02theta_0_<dtheta);
     inds_7iii = (theta2theta_0<dtheta) & (theta_02theta_0_<dtheta);
 
@@ -76,6 +76,31 @@ function I = Cauchy_interp_case7(theta, theta_0, theta_0_, B_coeffs, Dhatin, ...
         interp_coeffs = interp_cubic(interp_pts(1), interp_pts(2), interp_vals(1), interp_vals(2), dinterp_val_at_theta_0);
         interp_poly = polyval(flipud(interp_coeffs),z);
         I(inds_7i) = (w(:,inds_7i).')*(interp_poly./hatout(z));
+    end
+
+    % case one' - where \theta=\theta_0'\neq\theta_0,
+    %(can't happen in elegant theory but can in inelegant practice, as we are dealing with lots of theta at once)
+    % need to use derivative (e.g. L'hopital's)
+    if sum(inds_7i_)>0
+%         dhatout = @(theta) p*sin(p*theta);
+%         I(inds_7i) = 0;
+%         for m=1:length(B_coeffs)
+%             I(inds_7i) = I(inds_7i) + B_coeffs*Dhatin_derivs{m}{1}(theta(inds_7i));
+%         end
+%         I(inds_7i) = (inds_7i)./dhatout(theta(inds_7i));
+
+        % don't need a loop over theta, because they are all approximately
+        % \theta_0 :-)
+        interp_pts = [theta_0; theta_0_];
+        interp_vals = zeros(size(interp_pts));
+        dinterp_val_at_theta_0_ = 0;
+        for m=1:length(B_coeffs)
+            interp_vals = interp_vals + B_coeffs(m)*Dhatin{m}(interp_pts);
+            dinterp_val_at_theta_0_ = dinterp_val_at_theta_0_ + B_coeffs(m)*Dhatin_derivs{m}{1}(theta_0_);
+        end
+        interp_coeffs = interp_cubic(interp_pts(1), interp_pts(2), interp_vals(1), interp_vals(2), dinterp_val_at_theta_0_);
+        interp_poly = polyval(flipud(interp_coeffs),z);
+        I(inds_7i_) = (w(:,inds_7i).')*(interp_poly./hatout(z));
     end
 
     % case two - double pole residue at \theta_0=\theta_0'\neq\theta
@@ -109,9 +134,9 @@ function I = Cauchy_interp_case7(theta, theta_0, theta_0_, B_coeffs, Dhatin, ...
         ddhatout = @(theta) -p^2*cos(p*theta);
         I(inds_7iii) = 0;
         for m=1:length(B_coeffs)
-            I(inds_7iii) = I(inds_7iii) + B_coeffs*Dhatin_derivs{m}{2}(theta(inds_7iii));
+            I(inds_7iii) = I(inds_7iii) + B_coeffs(m)*Dhatin_derivs{m}{2}(theta(inds_7iii));
         end
-        I(inds_7iii) = (inds_7iii)./ddhatout(theta(inds_7iii));
+        I(inds_7iii) = I(inds_7iii)./ddhatout(theta(inds_7iii));
     end
 
 end

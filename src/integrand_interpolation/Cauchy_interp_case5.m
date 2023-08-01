@@ -28,11 +28,22 @@ function I = Cauchy_interp_case5(theta, theta_0, B, Dhatin, Dhatin_derivs, ...
     
     % need to use second derivative (e.g. L'hopital's)
     if sum(inds_5i)>0
-        dhatout = @(theta) p*sin(p*theta);
-        I(inds_5i) = 0;
-        for m=1:length(B_coeffs)
-            I(inds_5i) = I(inds_5i) + B_coeffs*Dhatin_derivs{m}{1}(theta(inds_5i));
+%         dhatout = @(theta) -p*sin(p*theta);
+%         I(inds_5i) = 0;
+%         for m=1:length(B)
+%             I(inds_5i) = I(inds_5i) + B(m)*Dhatin_derivs{m}{1}(theta(inds_5i));
+%         end
+%         I(inds_5i) = I(inds_5i)./dhatout(theta(inds_5i));
+        %create linear function which interpolates value and derivative at
+        %theta_0
+        P1_ = 0; % gradient
+        for m=1:length(B)
+            P1_ = P1_ + B(m)*Dhatin_derivs{m}{1}(theta_0);
         end
-        I(inds_5i) = (inds_5i)./dhatout(theta(inds_5i));
+        P2_ = P2-P1_*theta_0; % intercept
+
+        [z_,w_] = Cauchy_box_quad(theta_0, theta_0-h, theta_0+h, h, Nquad, 1, true);
+        P_ = P1_*z + P2_;
+        I(inds_5i) = (w_.'.*P_.')*(1./hatout(z_));
     end
 end

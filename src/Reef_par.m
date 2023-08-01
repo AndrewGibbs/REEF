@@ -15,8 +15,8 @@ classdef Reef < handle
         
         % thresholds/tolerances
         %round_error_width_per_can_inc = 0.0015 %optimised using screen_testRES_test_quad.m (was 1e-3/2)
-        round_error_width = 0.001
-        clas_error_width = 0.1 % width at which classical embedding formula becomes inaccurate
+        round_error_width = 0.001 % 0.001 width at which rounding errors become catestrophic
+        clas_error_width = 0.1 % 0.1 width at which classical embedding formula becomes inaccurate
         rank_tol = 1e-5
         reconstruction_strategy = 1
         % 1 - least squares via Moore-Penrose inverse
@@ -30,6 +30,7 @@ classdef Reef < handle
 
         % inverse/pseudo-inverse
         inv_sampling_matrix
+        pinv_tol = 1e-4
 
         % parameter for basis pursuit (unused)
         rho = 10^9
@@ -39,7 +40,7 @@ classdef Reef < handle
         full_rank % does the collocation matrix have full rank?
 
         %should the residues be interpolated in the Cauchy integral?
-        res_interp = false
+        res_interp = true
 
         % derivs
         num_derivs = 0
@@ -125,7 +126,13 @@ classdef Reef < handle
                     if self.num_derivs<2
                         warning("Far-field derivative(s) may be approximated");
                     end
-               end
+                elseif strcmp(varargin{n},'delta')
+                    self.pinv_tol = varargin{n+1};
+                elseif strcmp(varargin{n},'h')
+                    self.round_error_width = varargin{n+1};
+                elseif strcmp(varargin{n},'H')
+                    self.clas_error_width = varargin{n+1};
+                end
             end
 
             % check for a reasonable reconstruction strategy index
@@ -144,18 +151,18 @@ classdef Reef < handle
             % of finding a submatrix which is invertible.
 
             sampling_matrix = get_sampling_matrix(alpha_in,self.FF_in,self.hat);
-            if manual_M
-                if rank(sampling_matrix,self.rank_tol) < manual_M_val
-                    error("Numerical rank too low, add more inc waves");
-%                 elseif rank(sampling_matrix,self.rank_tol) > manual_M_val
-%                     error("Numerical rank too high, reduce rank_tol");
-                end
-            end
+%             if manual_M
+%                 if rank(sampling_matrix,self.rank_tol) < manual_M_val
+%                     error("Numerical rank too low, add more inc waves");
+% %                 elseif rank(sampling_matrix,self.rank_tol) > manual_M_val
+% %                     error("Numerical rank too high, reduce rank_tol");
+%                 end
+%             end
 
             switch self.reconstruction_strategy
                 case 1 % option 1: use least squares to minimise coefficients 2-norm
                     [self.alpha_in, self.sampling_matrix, self.FF_in, self.inv_sampling_matrix] ...
-                        = get_LS_MP(alpha_in, self.FF_in, self.hat, sampling_matrix, self.rank_tol);
+                        = get_LS_MP(alpha_in, self.FF_in, self.hat, sampling_matrix, self.pinv_tol);
 %                 case 3 % option 3: use basis pursuit to minimise coefficients 1-norm
 %                     % nothing much to do now
 %                     error("This approach doesn't work - due to absence of basis persuit for complex vectors");
@@ -164,14 +171,15 @@ classdef Reef < handle
 %                     self.sampling_matrix = sampling_matrix;
 
                 case 2 % option 2: maximise determinant of submatrix
-                
+                    self.M = manual_M_val;
                     if isempty(keep_incs)
                         [self.alpha_in, self.sampling_matrix, self.FF_in, self.FF_in_derivs, self.full_rank] ...
-                            = choose_submatrix(alpha_in, FF_in, self.FF_in_derivs, sampling_matrix, self.M, self.rank_tol);
+                            = choose_submatrix(alpha_in, self.FF_in, self.FF_in_derivs, sampling_matrix, self.M, self.rank_tol);
                     else
                         [self.alpha_in, self.sampling_matrix, self.FF_in, self.FF_in_derivs] ...
-                            = choose_submatrix_keeps(alpha_in, FF_in, self.FF_in_derivs, sampling_matrix, self.M, self.rank_tol,keeps);
+                            = choose_submatrix_keeps(alpha_in, self.FF_in, self.FF_in_derivs, sampling_matrix, self.M, self.rank_tol,keeps);
                     end
+                    self.inv_sampling_matrix = inv(self.sampling_matrix);
             end
 
 
@@ -186,7 +194,7 @@ classdef Reef < handle
             end
         end
         
-        function B = getBmatrix(self,alpha_out)
+        function [B,res] = getBmatrix(self,alpha_out)
             alpha_out = alpha_out(:);
             %initialise matrices
             RHS = zeros(self.M,length(alpha_out));
@@ -209,6 +217,8 @@ classdef Reef < handle
                     B(j,:) = Basis_Pursuit(self.sampling_matrix, u_3p4, self.rho);
                 end
             end
+%             disp(norm(B)^2);
+            res = norm(self.sampling_matrix*B-u_3p4);
         end
         
         function Dout = getFarField(self,theta_out,alpha_out)
@@ -248,6 +258,7 @@ classdef Reef < handle
             for m=1:length(self.alpha_in)
                 top = top + B(m,:).*(self.hat(theta_out,self.alpha_in(m)).*self.FF_in{m}(theta_out));
             end
+            sum_bm_Dhat_at_theta = top;
             Dout = top./bottom;
             
             % now add a correction if required (cases 2-4)
@@ -276,7 +287,13 @@ classdef Reef < handle
        %cases 4-7 all require some kind of Cauchy integral.
        
             for n=1:length(alpha_out)
-                for res_pair_index=1:length(res_pairs{n})
+                
+            end
+
+        end
+
+        function correction
+            for res_pair_index=1:length(res_pairs{n})
                     % case 4 Cauchy integral around residues, not theta_out
                     if ~isempty(case4_theta_inds{n,res_pair_index})
                         theta_0 = res_pairs{n}{res_pair_index}(1);
@@ -311,8 +328,22 @@ classdef Reef < handle
                                     p_at_residues = p_at_residues+B(m,n)*self.Dhat_in{m}(residues);
                                 end
                                 denom = @(z) self.hat(z,alpha_out(n));
-                                Dout(case4_theta_inds{n,res_pair_index},n) =  Dout(case4_theta_inds{n,res_pair_index},n)+...
-                                        Cauchy_interp_case4(theta_out(case4_theta_inds{n,res_pair_index}), residues, p_at_residues, denom, h, self.qppw);
+
+                                coalesced_residues = (abs(residues(1)-residues(2))<self.deriv_approx_width);
+
+                                if coalesced_residues % case when \theta_0=\theta_0'
+                                    dp_at_residues = 0;
+                                    for m=1:length(self.alpha_in)
+                                        dp_at_residues = dp_at_residues+B(m,n)*self.Dhat_in_derivs{m}{1}(residues(1));
+                                    end
+                                    Dout(case4_theta_inds{n,res_pair_index},n) =  Dout(case4_theta_inds{n,res_pair_index},n)+...
+                                            Cauchy_interp_case4_coalescing_residues(theta_out(case4_theta_inds{n,res_pair_index}), residues(1), ...
+                                            p_at_residues(1), dp_at_residues, denom, h, self.qppw);
+                                else % more common case
+                                    Dout(case4_theta_inds{n,res_pair_index},n) =  Dout(case4_theta_inds{n,res_pair_index},n)+...
+                                            Cauchy_interp_case4(theta_out(case4_theta_inds{n,res_pair_index}), residues, ...
+                                            p_at_residues, denom, h, self.qppw);
+                                end
         
                             else
                                 for m=1:length(self.alpha_in)
@@ -334,15 +365,16 @@ classdef Reef < handle
                             theta_0_ = res_pairs{n}{res_pair_index}(res_nearest_index_loc);
                             case5U6_theta_inds = [case5_theta_inds{n,res_pair_index,res_index_loc} case6_theta_inds{n,res_pair_index,res_index_loc}];
                             if ~isempty(case5U6_theta_inds)
-                                a = min([theta_out(case5U6_theta_inds).' theta_0])-h;
-                                b = max([theta_out(case5U6_theta_inds).' theta_0])+h;
-                                [z,w] = Cauchy_box_quad(theta_out(case5U6_theta_inds),a,b,h,self.qppw,self.kwave,true);
                                 Dout(case5U6_theta_inds,n) = 0;
                                 if self.res_interp % takes place outside of m loop
                                     Dout(case5U6_theta_inds,n) = Dout(case5U6_theta_inds,n) +...
                                         Cauchy_interp_case5(theta_out(case5U6_theta_inds), theta_0, B(:,n), ...
-                                        self.Dhat_in, @(z) self.hat(z,alpha_out(n)), h, self.qppw);
+                                        self.Dhat_in, self.Dhat_in_derivs, @(z) self.hat(z,alpha_out(n)),...
+                                        self.p, h, self.qppw, self.deriv_approx_width);
                                 else % evaluate oscillatory contour
+                                    a = min([theta_out(case5U6_theta_inds).' theta_0])-h;
+                                    b = max([theta_out(case5U6_theta_inds).' theta_0])+h;
+                                    [z,w] = Cauchy_box_quad(theta_out(case5U6_theta_inds),a,b,h,self.qppw,self.kwave,true);
                                     for m=1:length(self.alpha_in)
     
     %                                     if self.res_interp
@@ -361,10 +393,19 @@ classdef Reef < handle
                                 end
 
                                 %case 6 resdiue correction
-                                if ~isempty(case6_theta_inds{n,res_pair_index})
+                                if ~isempty(case6_theta_inds{n,res_pair_index,res_index_loc})
+                                    switch res_index_loc
+                                        case 1
+                                            Dhat_res_vals = Dhat_res_vals1;
+                                        case 2
+                                            Dhat_res_vals = Dhat_res_vals2;
+                                    end
                                     for m=1:length(self.alpha_in)
+%                                         Dout(case6_theta_inds{n,res_pair_index,res_index_loc},n) =  Dout(case6_theta_inds{n,res_pair_index,res_index_loc},n)+...
+%                                             B(m,n)*(Laurent_coeff(theta_0_).*(Dhat_res_vals{m}(n,res_nearest_index_loc)))./(theta_0_-theta_out(case6_theta_inds{n,res_pair_index,res_index_loc}));
                                         Dout(case6_theta_inds{n,res_pair_index,res_index_loc},n) =  Dout(case6_theta_inds{n,res_pair_index,res_index_loc},n)+...
-                                            B(m,n)*(Laurent_coeff(theta_0_).*(Dhat_res_vals{m}(n,res_nearest_index_loc)))./(theta_0_-theta_out(case6_theta_inds{n,res_pair_index,res_index_loc}));
+                                            B(m,n)*(Laurent_coeff(theta_0_).*(Dhat_res_vals{m}(case6_theta_inds{n,res_pair_index,res_index_loc},n)))...
+                                            ./(theta_0_-theta_out(case6_theta_inds{n,res_pair_index,res_index_loc}));
                                     end
                                 end
                             end
@@ -375,14 +416,12 @@ classdef Reef < handle
                     if ~isempty(case7_theta_inds{n,res_pair_index})
                         theta_0 = res_pairs{n}{res_pair_index}(1);
                         theta_0_ = res_pairs{n}{res_pair_index}(2);
-                        a = min([theta_out(case7_theta_inds{n,res_pair_index}).' theta_0 theta_0_])-h;
-                        b = max([theta_out(case7_theta_inds{n,res_pair_index}).' theta_0 theta_0_])+h;
-                        [z,w] = Cauchy_box_quad(theta_out(case7_theta_inds{n,res_pair_index}),a,b,h,self.qppw,self.kwave,true);
                         Dout(case7_theta_inds{n,res_pair_index},n) = 0;
                             if self.res_interp
                                 Dout(case7_theta_inds{n,res_pair_index},n) =...
                                     Cauchy_interp_case7(theta_out(case7_theta_inds{n,res_pair_index}), theta_0, theta_0_, B(:,n),...
-                                        self.Dhat_in, @(z) self.hat(z,alpha_out(n)), h, self.qppw);
+                                        self.Dhat_in, self.Dhat_in_derivs, @(z) self.hat(z,alpha_out(n)), self.p, ...
+                                        h, self.qppw, self.deriv_approx_width, sum_bm_Dhat_at_theta(case7_theta_inds{n,res_pair_index}));
                                 
                                 %TO DO: account for special cases (see notes)
 
@@ -394,6 +433,9 @@ classdef Reef < handle
 %                                                                         self.qppw);
 %                                 end
                             else
+                                a = min([theta_out(case7_theta_inds{n,res_pair_index}).' theta_0 theta_0_])-h;
+                                b = max([theta_out(case7_theta_inds{n,res_pair_index}).' theta_0 theta_0_])+h;
+                                [z,w] = Cauchy_box_quad(theta_out(case7_theta_inds{n,res_pair_index}),a,b,h,self.qppw,self.kwave,true);
                                 for m=1:length(self.alpha_in)
                                     Dout(case7_theta_inds{n,res_pair_index},n) = Dout(case7_theta_inds{n,res_pair_index},n) + ...
                                             B(m,n)*w.'*(self.hat(z,self.alpha_in(m)).*self.FF_in{m}(z)./self.hat(z,alpha_out(n)));
@@ -404,7 +446,6 @@ classdef Reef < handle
 %                             self.Dhat_in, @(z) self.hat(z,alpha_out(n)), h, self.qppw);
                     end
                 end
-            end
 
         end
 
