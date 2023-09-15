@@ -91,7 +91,8 @@ function I = Cauchy_interp_case7(theta, theta_0, theta_0_, B_coeffs, Dhatin, ...
 
         % don't need a loop over theta, because they are all approximately
         % \theta_0 :-)
-        interp_pts = [theta_0; theta_0_];
+%         interp_pts = [theta_0; theta_0_];
+        interp_pts = [theta_0_; theta_0];
         interp_vals = zeros(size(interp_pts));
         dinterp_val_at_theta_0_ = 0;
         for m=1:length(B_coeffs)
@@ -100,7 +101,7 @@ function I = Cauchy_interp_case7(theta, theta_0, theta_0_, B_coeffs, Dhatin, ...
         end
         interp_coeffs = interp_cubic(interp_pts(1), interp_pts(2), interp_vals(1), interp_vals(2), dinterp_val_at_theta_0_);
         interp_poly = polyval(flipud(interp_coeffs),z);
-        I(inds_7i_) = (w(:,inds_7i).')*(interp_poly./hatout(z));
+        I(inds_7i_) = (w(:,inds_7i_).')*(interp_poly./hatout(z));
     end
 
     % case two - double pole residue at \theta_0=\theta_0'\neq\theta
