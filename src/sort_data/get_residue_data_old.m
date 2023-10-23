@@ -28,25 +28,9 @@ function [ResDist1,ResDist2,ResVals1,ResVals2,Dhat_res_vals1,Dhat_res_vals2,Dhat
                     Dhat_res_vals2{m}(:,n) = Dhat_res_vals{m}(n,ResIndices2(n,:));
                 end
             end
-            %these distances were wrong over the 2pi-0 jump
+            %these distances will be wrong over the 2pi-0 jump
             ResDist1 = (ResVals1.'-theta_out);
             ResDist2 = (ResVals2.'-theta_out);
-
-            % account for the jumps
-            ResDist1_plus2pi = ResDist1+2*pi;
-            ResDist1_minus2pi = ResDist1+2*pi;
-            ResDist1(abs(ResDist1_plus2pi)<abs(ResDist1))=ResDist1_plus2pi(abs(ResDist1_plus2pi)<abs(ResDist1));
-            ResDist1(abs(ResDist1_minus2pi)<abs(ResDist1))=ResDist1_minus2pi(abs(ResDist1_minus2pi)<abs(ResDist1));
-            ResDist2_plus2pi = ResDist2+2*pi;
-            ResDist2_minus2pi = ResDist2+2*pi;
-            ResDist2(abs(ResDist2_plus2pi)<abs(ResDist2))=ResDist2_plus2pi(abs(ResDist2_plus2pi)<abs(ResDist2));
-            ResDist2(abs(ResDist2_minus2pi)<abs(ResDist2))=ResDist2_minus2pi(abs(ResDist2_minus2pi)<abs(ResDist2));
-
-
-
-            %these distances were wrong over the 2pi-0 jump
-%             ResDist1 = cyclic_distance(ResVals1.',theta_out);
-%             ResDist2 = cyclic_distance(ResVals2.',theta_out);
             
             %these two were defined the wrong way around before
             ResVals1 = ResVals1.';

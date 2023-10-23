@@ -15,7 +15,7 @@ classdef Reef < handle
         
         % thresholds/tolerances
         %round_error_width_per_can_inc = 0.0015 %optimised using screen_testRES_test_quad.m (was 1e-3/2)
-        round_error_width = 0.001 % 0.001 width at which rounding errors become catestrophic
+        round_error_width = 0.01 % 0.001 width at which rounding errors become catestrophic
         clas_error_width = 0.15 % 0.1 width at which classical embedding formula becomes inaccurate
         rank_tol = 1e-5
         reconstruction_strategy = 1
@@ -242,7 +242,7 @@ classdef Reef < handle
           
 
             [res_pairs,~,cases,case4_theta_inds,case5_theta_inds,case6_theta_inds,case7_theta_inds]...
-            = choose_cases(theta_out,alpha_out,Z,h,H);
+            = choose_cases_old(theta_out,alpha_out,Z,h,H);
             
              % create tiled copies of b_m for indexing purposes
              for m=1:length(self.alpha_in)
@@ -361,10 +361,21 @@ classdef Reef < handle
                             if ~isempty(case5U6_theta_inds)
                                 Dout(case5U6_theta_inds,n) = 0;
                                 if self.res_interp % takes place outside of m loop
-                                    Dout(case5U6_theta_inds,n) = Dout(case5U6_theta_inds,n) +...
-                                        Cauchy_interp_case5(theta_out(case5U6_theta_inds), theta_0, B(:,n), ...
-                                        self.Dhat_in, self.Dhat_in_derivs, @(z) self.hat(z,alpha_out(n)),...
-                                        self.p, h, self.qppw, self.deriv_approx_width);
+%                                     Dout(case5U6_theta_inds,n) = Dout(case5U6_theta_inds,n) +...
+%                                         Cauchy_interp_case5(theta_out(case5U6_theta_inds), theta_0, B(:,n), ...
+%                                         self.Dhat_in, self.Dhat_in_derivs, @(z) self.hat(z,alpha_out(n)),...
+%                                         self.p, h, self.qppw, self.deriv_approx_width);
+                                    % have been forced to replaced
+                                    % vectorised code with loop, using
+                                    % theta_loop_index. Was not producing
+                                    % the correct result in vectorised
+                                    % form.
+                                    for theta_loop_index=case5U6_theta_inds
+                                        Dout(theta_loop_index,n) = Dout(theta_loop_index,n) +...
+                                            Cauchy_interp_case5(theta_out(theta_loop_index), theta_0, B(:,n), ...
+                                            self.Dhat_in, self.Dhat_in_derivs, @(z) self.hat(z,alpha_out(n)),...
+                                            self.p, h, self.qppw, self.deriv_approx_width);
+                                    end
                                 else % evaluate oscillatory contour
                                     a = min([theta_out(case5U6_theta_inds).' theta_0])-h;
                                     b = max([theta_out(case5U6_theta_inds).' theta_0])+h;
@@ -412,11 +423,18 @@ classdef Reef < handle
                         theta_0_ = res_pairs{n}{res_pair_index}(2);
                         Dout(case7_theta_inds{n,res_pair_index},n) = 0;
                             if self.res_interp
-                                Dout(case7_theta_inds{n,res_pair_index},n) =...
-                                    Cauchy_interp_case7(theta_out(case7_theta_inds{n,res_pair_index}), theta_0, theta_0_, B(:,n),...
-                                        self.Dhat_in, self.Dhat_in_derivs, @(z) self.hat(z,alpha_out(n)), self.p, ...
-                                        h, self.qppw, self.deriv_approx_width, sum_bm_Dhat_at_theta(case7_theta_inds{n,res_pair_index}));
-                                
+                                % the below was causing errors when there
+                                % theta was a vector being passed
+%                                 Dout(case7_theta_inds{n,res_pair_index},n) =...
+%                                         Cauchy_interp_case7(theta_out(case7_theta_inds{n,res_pair_index}), theta_0, theta_0_, B(:,n),...
+%                                             self.Dhat_in, self.Dhat_in_derivs, @(z) self.hat(z,alpha_out(n)), self.p, ...
+%                                             h, self.qppw, self.deriv_approx_width, sum_bm_Dhat_at_theta(case7_theta_inds{n,res_pair_index}));
+                                for theta_loop_index=case7_theta_inds{n,res_pair_index}
+                                    Dout(theta_loop_index,n) =...
+                                        Cauchy_interp_case7(theta_out(theta_loop_index), theta_0, theta_0_, B(:,n),...
+                                            self.Dhat_in, self.Dhat_in_derivs, @(z) self.hat(z,alpha_out(n)), self.p, ...
+                                            h, self.qppw, self.deriv_approx_width, sum_bm_Dhat_at_theta(theta_loop_index,n));
+                                end
                                 %TO DO: account for special cases (see notes)
 
 %                                 for m=1:length(self.alpha_in)
